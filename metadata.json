@@ -1,0 +1,6 @@
+{
+  "name": "경기도 공익활동 공지 숏폼 제작기",
+  "description": "공익 센터 공지사항을 분석하여 20대 타겟의 매력적인 15초 홍보 숏폼 대본과 고화질 일러스트 프롬프트를 원클릭 생성 및 시뮬레이션 감상하는 AI 콘텐츠 디렉터 플랫폼",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
