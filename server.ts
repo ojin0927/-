@@ -315,7 +315,7 @@ app.post("/api/notice-detail", async (req, res) => {
 
 // 3. AI Shortform Generation Endpoint (Uses gemini-3.5-flash and strict JSON mapping schema)
 app.post("/api/generate-shortform", async (req, res) => {
-  const { title, content } = req.body;
+  const { title, content, targetPlatform = "youtube" } = req.body;
   if (!title) {
     return res.status(400).json({ success: false, error: "Title is required" });
   }
@@ -327,19 +327,31 @@ ${content || "상세 정보 없음 (제목 위주 분석 요망)"}
 `;
 
   try {
+    const isYoutube = targetPlatform === "youtube";
+    const platformGuideline = isYoutube 
+      ? `당신은 대한민국 대표 유튜브 쇼츠(YouTube Shorts) 트렌드 스타 플레이어이자 일류 콘텐츠 디렉터입니다.
+         - 유튜브 쇼츠 노출에 안성맞춤인 고자극, 고활성 트렌디 톤앤매너를 지향합니다.
+         - 자막 및 나레이션은 호기심을 유발하고 2030 청년들이 바로 스와이프를 멈추도록 캐주얼하고 속도감 넘치는 말투(~했어?, ~일까?, 대박 꿀혜택!)로 제작하십시오.`
+      : `당신은 대한민국 경기도공익활동지원센터의 세련된 공식 홍보 디렉터입니다.
+         - 공공 채널 공지사항에 신뢰를 더하면서도 2030 청년들에게 친절하고 명료하게 접근하는 깔끔한 톤앤매너를 지향합니다.
+         - 조리 있고 품위 있게 센터의 정식 혜택을 소개하십시오. (~해 보세요!, 안내해 드릴게요!)`;
+
     const prompt = `
 당신은 대한민국 공익지원센터의 공공 정보를 20대 MZ세대 및 청년 참여자용 15초 홍보 숏폼 영상 기획안으로 리브랜딩하는 스타 콘텐츠 디렉터이자 디자이너입니다.
 아래 제공된 공공 센터의 공지사항 공문 전체를 읽고, 핵심 참여 혜택(혜택/리워드/수당/현금/장비지원 등)을 극적으로 강조하는 15초 숏폼 기획안(장면 1~5, Scene당 정확히 3초 배정)과 이에 100% 대응하는 이미지 생성 프롬프트 5개를 생성하세요.
+
+[톤앤매너 테마 가이드라인]
+${platformGuideline}
 
 [규칙 사항]
 1. 15초 영상 5개 장면의 완벽한 템플릿:
    - Scene 1 [HOOK - 혜택 강조]: 리워드, 상금, 활동비, 직접 혜택 등을 질문형이나 선언형으로 1초만에 흥미를 유발할 수 있도록 세련되고 강력한 자막과 나레이션 배치.
    - Scene 2 [WHAT - 실제 행동]: 어떤 활동인지 핵심 직무나 액티비티를 묘사.
-   - Scene 3 [WHO - 모집 대상]: 자격 요건, 인원, 우대 사항을 젊은 톤으로 기술.
+   - Scene 3 [WHO - 모집 대상]: 자격 요건, 인원, 우대 사항을 플랫폼 컨셉에 맞는 톤으로 기술.
    - Scene 4 [WHEN - 기간 및 방법]: 모집 마감일과 구체적 접수 방법.
    - Scene 5 [CTA - 프로필 링크 유도]: 최상의 행동 촉구를 "프로필 링크 클릭" 및 "공익위키"를 통해 유도.
 
-2. 음성 설정: '한국어 20대 여성 (가장 인기 있고 밝고 신뢰감 있는 음색)'으로 지정하십시오.
+2. 음성 설정: 플랫폼 맞춤형 나레이터 타입 추천 및 연출 톤 지정.
 
 3. 이미지 생성 프롬프트(prompt) 작성 규칙:
    - 모두 반드시 "영어 (English)"로 작성.
@@ -394,9 +406,13 @@ ${content || "상세 정보 없음 (제목 위주 분석 요망)"}
               type: Type.OBJECT,
               properties: {
                 title: { type: Type.STRING, description: "분석된 공지사항 요약 제목" },
-                coreBenefits: { type: Type.STRING, description: "추출한 가장 핵심적인 혜택 한줄 요약" }
+                coreBenefits: { type: Type.STRING, description: "추출한 가장 핵심적인 혜택 한줄 요약" },
+                youtubeTitle: { type: Type.STRING, description: "유튜브 쇼츠 업로드 특화 대표 제목 (예: '매달 50만원 수당 주는 경기도 사기적인 꿀혜택 ㄷㄷ')" },
+                youtubeTags: { type: Type.ARRAY, items: { type: Type.STRING }, description: "유튜브 Shorts 업로드 추천 해시태그 리스트 3~5개" },
+                youtubeDescription: { type: Type.STRING, description: "유튜브 쇼츠 업로드용 매력적이고 유인력 있는 1~2줄 본문 설명" },
+                recommendedBpmBgm: { type: Type.STRING, description: "숏폼 템포에 어울리는 추천 비트(BPM) 및 배경 음악 감성 가이드" }
               },
-              required: ["title", "coreBenefits"]
+              required: ["title", "coreBenefits", "youtubeTitle", "youtubeTags", "youtubeDescription", "recommendedBpmBgm"]
             }
           },
           required: ["recommendVoice", "tone", "scenes", "meta"]

@@ -11,6 +11,8 @@ interface NoticeListProps {
   onRefreshList: () => void;
   onGenerate: (notice: Notice) => void;
   isGenerating: boolean;
+  targetPlatform: "standard" | "youtube";
+  onChangePlatform: (val: "standard" | "youtube") => void;
 }
 
 export default function NoticeList({
@@ -20,7 +22,9 @@ export default function NoticeList({
   isLoadingList,
   onRefreshList,
   onGenerate,
-  isGenerating
+  isGenerating,
+  targetPlatform,
+  onChangePlatform
 }: NoticeListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("전체");
@@ -181,6 +185,37 @@ export default function NoticeList({
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-sky-100 bg-sky-50/20 p-4 shrink-0 transition-all"
           >
+            {/* Platform Target Selector */}
+            <div className="mb-3.5">
+              <span className="text-[9px] font-black text-slate-400 block mb-1.5 uppercase tracking-wider">
+                🎯 숏폼 기획 타겟 매체 설정
+              </span>
+              <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl">
+                <button
+                  onClick={() => onChangePlatform("youtube")}
+                  className={`flex-1 py-1 px-1.5 text-[10px] font-bold rounded-lg transition-all ${
+                    targetPlatform === "youtube"
+                      ? "bg-white text-rose-600 shadow-2xs border border-rose-150 font-black"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                  title="유튜브 쇼츠, 인스타 릴스, 틱톡에 맞는 고자극 호기심 유발 및 속도감 있는 캐주얼 톤앤매너로 대본 생성"
+                >
+                  🎬 유튜브 쇼츠 전용
+                </button>
+                <button
+                  onClick={() => onChangePlatform("standard")}
+                  className={`flex-1 py-1 px-1.5 text-[10px] font-bold rounded-lg transition-all ${
+                    targetPlatform === "standard"
+                      ? "bg-white text-sky-600 shadow-2xs border border-sky-150 font-black"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                  title="경기도 지원기관 공식 배포를 위한 유려하고 정보 전달력 높은 친근한 정보전달 톤앤매너로 대본 생성"
+                >
+                  📢 센터 공식 일반용
+                </button>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-2xs font-semibold text-slate-700 flex items-center gap-1">
                 <FileText className="w-3.5 h-3.5 text-sky-500" />
@@ -189,14 +224,16 @@ export default function NoticeList({
               <button
                 onClick={() => onGenerate(selectedNotice)}
                 disabled={isGenerating}
-                className="px-3 py-1 bg-sky-500 text-white rounded-lg text-2xs font-bold hover:bg-sky-600 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                className={`px-3 py-1 text-white rounded-lg text-2xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50 ${
+                  targetPlatform === "youtube" ? "bg-rose-500 hover:bg-rose-600" : "bg-sky-500 hover:bg-sky-600"
+                }`}
               >
                 {isGenerating ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <Sparkles className="w-3.5 h-3.5" />
                 )}
-                이 공지로 숏폼 대본 추출하기
+                {targetPlatform === "youtube" ? "쇼츠 기획 시작!" : "일반 숏폼 기획 시작"}
               </button>
             </div>
             <div className="max-h-36 overflow-y-auto text-3xs text-slate-500 leading-relaxed bg-white border border-sky-100/50 rounded-lg p-2.5 font-sans whitespace-pre-line">
@@ -204,7 +241,7 @@ export default function NoticeList({
                 selectedNotice.content
               ) : (
                 <span className="text-slate-400 italic">
-                  기본 분석 데이터는 실시간 공지사항 제목에서 지능적으로 요약됩니다. "숏폼 생성" 버튼을 터치하여 전체 5장면 기획을 시작하세요!
+                  기본 분석 데이터는 실시간 공지사항 제목에서 지능적으로 요약됩니다. "기획 시작" 버튼을 터치하여 전체 5장면 기획을 시작하세요!
                 </span>
               )}
             </div>

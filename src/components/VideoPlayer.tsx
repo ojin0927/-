@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ShortformData, Scene } from "../types";
-import { Play, Pause, RotateCw, Volume2, VolumeX, Smartphone, MonitorPlay, Sparkles, Trophy, Calendar, Users, Layers, Activity } from "lucide-react";
+import { Play, Pause, RotateCw, Volume2, VolumeX, Smartphone, MonitorPlay, Sparkles, Trophy, Calendar, Users, Layers, Activity, Palette } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface VideoPlayerProps {
@@ -13,6 +13,15 @@ export default function VideoPlayer({ data }: VideoPlayerProps) {
   const [isMuted, setIsMuted] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   
+  const [imgSeedOffset, setImgSeedOffset] = useState(0);
+
+  // States for natural-sounding human TTS fine-tuning
+  const [voiceRate, setVoiceRate] = useState(0.98); // 0.98 is a highly natural, breathing human rate
+  const [voicePitch, setVoicePitch] = useState(1.05); // slightly elevated, happy friendly pitch
+  const [systemVoiceList, setSystemVoiceList] = useState<SpeechSynthesisVoice[]>([]);
+  const [chosenSystemVoiceName, setChosenSystemVoiceName] = useState("");
+  const [isVoicePanelOpen, setIsVoicePanelOpen] = useState(false);
+
   const timerRef = useRef<number | null>(null);
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
   const lastActiveSceneRef = useRef<number>(-1);
@@ -53,7 +62,64 @@ export default function VideoPlayer({ data }: VideoPlayerProps) {
     };
   }, [isPlaying]);
 
-  // Synchronize Narration via Web Speech API (Optional & Fun!)
+  // Asynchronously query and bind premium human-like neural voices available in the user's browser
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const loadAllVoices = () => {
+        const list = window.speechSynthesis.getVoices();
+        const koList = list.filter(v => v.lang.startsWith("ko"));
+        
+        const finalList = koList.length > 0 ? koList : list;
+        setSystemVoiceList(finalList);
+
+        if (koList.length > 0) {
+          // Auto select premium natural sounding TTS engines
+          const preferNatural = koList.find(
+            v => v.name.includes("Google") || 
+                 v.name.toLowerCase().includes("natural") || 
+                 v.name.toLowerCase().includes("neural") ||
+                 v.name.includes("Yuna") ||
+                 v.name.includes("Siri")
+          );
+          if (preferNatural) {
+            setChosenSystemVoiceName(preferNatural.name);
+          } else {
+            setChosenSystemVoiceName(koList[0].name);
+          }
+        } else if (list.length > 0) {
+          setChosenSystemVoiceName(list[0].name);
+        }
+      };
+
+      loadAllVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadAllVoices;
+      }
+    }
+  }, []);
+
+  // Sync state parameters when chosen persona character changes from shortform data recomendVoice
+  useEffect(() => {
+    const voiceChoice = data.recommendVoice || "";
+    if (voiceChoice.includes("서아")) {
+      setVoiceRate(1.0);
+      setVoicePitch(1.15); // cheerful 20s college student voice
+    } else if (voiceChoice.includes("민준")) {
+      setVoiceRate(0.96);
+      setVoicePitch(0.95); // calm and smart mentor style
+    } else if (voiceChoice.includes("동우")) {
+      setVoiceRate(1.1);
+      setVoicePitch(1.05); // energetic 20s tempo
+    } else if (voiceChoice.includes("지아")) {
+      setVoiceRate(0.98);
+      setVoicePitch(1.0);  // professional clean announcer speech
+    } else if (voiceChoice.includes("은우")) {
+      setVoiceRate(1.05);
+      setVoicePitch(1.3);  // virtual mascot tone
+    }
+  }, [data.recommendVoice]);
+
+  // Synchronize Narration via Web Speech API with rich custom voice features
   useEffect(() => {
     if (!isPlaying) {
       if (window.speechSynthesis) {
@@ -68,14 +134,50 @@ export default function VideoPlayer({ data }: VideoPlayerProps) {
       
       const utterance = new SpeechSynthesisUtterance(activeScene.narration);
       utterance.lang = "ko-KR";
-      utterance.rate = 1.1; // Slightly fast for 15s rhythm
+      
+      // Assign custom refined neural rate, pitch and volume for maximum natural breathing qualities
+      utterance.rate = voiceRate;
+      utterance.pitch = voicePitch;
+      utterance.volume = isMuted ? 0 : 1.0;
+      
+      // Assign chosen natural target voice
+      if (chosenSystemVoiceName) {
+        const voices = window.speechSynthesis.getVoices();
+        const matchedVoice = voices.find(v => v.name === chosenSystemVoiceName);
+        if (matchedVoice) {
+          utterance.voice = matchedVoice;
+        }
+      }
       
       speechRef.current = utterance;
       window.speechSynthesis.speak(utterance);
       
       lastActiveSceneRef.current = activeSceneIndex;
     }
-  }, [activeSceneIndex, isPlaying, voiceEnabled, activeScene]);
+  }, [activeSceneIndex, isPlaying, voiceEnabled, activeScene, chosenSystemVoiceName, voiceRate, voicePitch, isMuted]);
+
+  const playVoicePreview = () => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    
+    // Pick active scene's subtitle as a preview chunk so that it matches context beautifully
+    const demo = activeScene.narration || "자연스럽고 부드러운 고음질 인공지능 나레이션 목소리입니다.";
+    const utterance = new SpeechSynthesisUtterance(demo);
+    utterance.lang = "ko-KR";
+    utterance.rate = voiceRate;
+    utterance.pitch = voicePitch;
+    utterance.volume = 1.0;
+
+    if (chosenSystemVoiceName) {
+      const voices = window.speechSynthesis.getVoices();
+      const matchedVoice = voices.find(v => v.name === chosenSystemVoiceName);
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
+      }
+    }
+
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handlePlayToggle = () => {
     // If we're starting or pausing, reset speech trackers
@@ -103,124 +205,73 @@ export default function VideoPlayer({ data }: VideoPlayerProps) {
 
   const progressPercentage = (currentTime / totalDuration) * 100;
 
-  // Custom visual components for each scene to simulate original animations
+  // Custom visual components for each scene with dynamic illustrator-themed background images
   const renderVisualMock = () => {
     const sIndex = activeSceneIndex + 1;
-    switch (sIndex) {
-      case 1:
-        return (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-sky-100/50 to-white">
-            <motion.div
-              animate={{ y: [0, -12, 0], rotate: [0, 8, -8, 0] }}
-              transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-              className="w-20 h-20 rounded-full bg-sky-100 flex items-center justify-center border-2 border-sky-300 shadow-md mb-4"
-            >
-              <Trophy className="w-10 h-10 text-sky-500" />
-            </motion.div>
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-white/80 backdrop-blur-sm border border-sky-100 px-3 py-1.5 rounded-full shadow-inner-sm mb-2"
-            >
-              <span className="text-4xs font-bold text-sky-600 tracking-wide uppercase">★ Scene 1 [HOOK] ★</span>
-            </motion.div>
-            <h3 className="text-sm font-extrabold text-slate-800 leading-snug drop-shadow-sm px-4">
-              {data.meta.coreBenefits || "상상도 몰랐던 압도적 혜택!"}
-            </h3>
-            {/* background bubbles */}
-            <div className="absolute w-2.5 h-2.5 bg-sky-200 rounded-full top-20 left-10 animate-ping"></div>
-            <div className="absolute w-4 h-4 bg-sky-300/60 rounded-full bottom-20 right-10 animate-bounce"></div>
+    
+    // Choose specific illust tags dynamically to render beautiful vector graphics
+    let illustTag = "illustration,sky,blue";
+    if (sIndex === 1) illustTag = "gift,award,success,smiling_youth";
+    else if (sIndex === 2) illustTag = "design,workshop,laptop,cooperation";
+    else if (sIndex === 3) illustTag = "friends,group,happy_students,community";
+    else if (sIndex === 4) illustTag = "calendar,clock,deadline,notebook";
+    else if (sIndex === 5) illustTag = "smartphone,click,touchscreen_illustration";
+
+    const baseSeed = (sIndex * 13) + imgSeedOffset;
+    const sceneImageUrl = `https://picsum.photos/seed/gongik_wiki_${illustTag}_${baseSeed}/300/533`;
+
+    return (
+      <div className="absolute inset-0 w-full h-full flex flex-col justify-between overflow-hidden">
+        {/* Dynamic Image Layer */}
+        <div className="absolute inset-0 w-full h-full z-0 bg-slate-100">
+          <img 
+            src={sceneImageUrl}
+            alt={activeScene.visualConcept || "Scene Visual"}
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover transition-all duration-700 hover:scale-105"
+          />
+          {/* Frosted and darkened gradient overlay mask to support premium typography readable edges */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/30 z-10"></div>
+        </div>
+
+        {/* HUD Overlay Layer */}
+        <div className="relative z-20 flex-1 flex flex-col justify-between p-4 pt-5 text-left h-full">
+          {/* Header element */}
+          <div className="w-full flex justify-between items-center bg-black/30 backdrop-blur-md border border-white/15 px-2 py-1 rounded-lg">
+            <span className="text-[7.5px] text-sky-400 font-extrabold tracking-widest uppercase">
+              ★ Scene {sIndex} ★
+            </span>
+            <span className="text-[7px] text-white/90 font-medium font-mono uppercase">
+              {activeScene.timeRange}
+            </span>
           </div>
-        );
-      case 2:
-        return (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-slate-50 to-sky-50">
+
+          {/* Central graphic widget supporting visual concept */}
+          <div className="my-auto flex flex-col items-center text-center">
             <motion.div
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ repeat: Infinity, duration: 1.8 }}
-              className="w-18 h-18 rounded-2xl bg-white border border-sky-200 flex items-center justify-center shadow-md mb-4"
+              animate={isPlaying ? { y: [0, -6, 0], scale: [1, 1.04, 1] } : {}}
+              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+              className="bg-black/35 backdrop-blur-md border border-white/20 p-2.5 rounded-2xl shadow-lg mb-2 inline-flex items-center justify-center max-w-[130px]"
             >
-              <Layers className="w-9 h-9 text-sky-500" />
+              {sIndex === 1 && <Trophy className="w-8 h-8 text-sky-400" />}
+              {sIndex === 2 && <Layers className="w-8 h-8 text-emerald-400" />}
+              {sIndex === 3 && <Users className="w-8 h-8 text-yellow-400" />}
+              {sIndex === 4 && <Calendar className="w-8 h-8 text-rose-450 text-rose-450 fill-rose-500/10" />}
+              {sIndex === 5 && <Smartphone className="w-8 h-8 text-sky-400" />}
             </motion.div>
-            <motion.div
-              className="bg-sky-500 px-2.5 py-1 rounded-md mb-2 shadow-sm"
-              animate={{ rotate: [-2, 2, -2] }}
-              transition={{ repeat: Infinity, duration: 3 }}
-            >
-              <span className="text-5xs font-mono font-bold text-white uppercase tracking-wider">ACTIVITY LAUNCH</span>
-            </motion.div>
-            <h3 className="text-xs font-semibold text-slate-700 max-w-[180px] leading-relaxed">
-              실무형 공익 기획 & 디지털 솔루션 역량 강화 워크숍
-            </h3>
-            {/* static laptop sketch icon decorator */}
-            <div className="w-24 h-1.5 bg-slate-300 rounded-full mt-4 flex items-center justify-center opacity-70">
-              <div className="w-6 h-1 bg-slate-400 rounded-full"></div>
+            
+            <div className="bg-white/10 backdrop-blur-xs border border-white/5 py-0.5 px-2 rounded-md max-w-[155px]">
+              <p className="text-[7.5px] font-bold text-white/90 leading-tight">
+                {activeScene.visualConcept || "비주얼 연출 중"}
+              </p>
             </div>
           </div>
-        );
-      case 3:
-        return (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-sky-50/20">
-            {/* Animated avatars ring */}
-            <div className="relative w-28 h-28 flex items-center justify-center mb-4">
-              <motion.div 
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 12, ease: "linear" }}
-                className="absolute inset-0 border border-dashed border-sky-300 rounded-full"
-              ></motion.div>
-              <Users className="w-10 h-10 text-sky-500 bg-white p-2 rounded-full border border-sky-100 shadow-sm" />
-              {/* orbiting dots */}
-              <div className="absolute top-0 w-3 h-3 rounded-full bg-sky-400 border border-white"></div>
-              <div className="absolute bottom-1 right-2 w-3.5 h-3.5 rounded-full bg-emerald-400 border border-white"></div>
-              <div className="absolute left-1 bottom-4 w-3.5 h-3.5 rounded-full bg-orange-300 border border-white"></div>
-            </div>
-            <span className="text-[10px] font-bold text-sky-600 block mb-1">■ 모집 대상 ■</span>
-            <p className="text-[11px] font-medium text-slate-700 px-4 leading-normal">
-              글쓰기, 기획, 소셜 활동에 관심 가득한 경기도 청년·대학생 누구나!
-            </p>
-          </div>
-        );
-      case 4:
-        return (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-white">
-            <motion.div
-              animate={{ scale: [1, 0.93, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5 }}
-              className="bg-rose-50 border border-rose-100 px-3 py-1 rounded-full text-rose-600 text-5xs font-bold mb-3 tracking-wider"
-            >
-              ⚠ 마감 임박 / CLOSE SOON ⚠
-            </motion.div>
-            <div className="w-16 h-16 rounded-full bg-sky-50 flex items-center justify-center border border-sky-200 mb-3 text-sky-500">
-              <Calendar className="w-8 h-8" />
-            </div>
-            <p className="text-3xs text-slate-400">접수 기한 준수</p>
-            <h4 className="text-xs font-bold text-slate-800 leading-tight mt-1">
-              경기도 공익활동지원포털 간편 구글폼 및 신청서 이메일 제출
-            </h4>
-          </div>
-        );
-      case 5:
-        return (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gradient-to-t from-sky-100/40 via-white to-white">
-            <motion.div
-              animate={{ scale: [1, 1.08, 1], y: [0, -4, 0] }}
-              transition={{ repeat: Infinity, duration: 1.8 }}
-              className="w-16 h-16 rounded-full bg-sky-500/10 flex items-center justify-center text-sky-600 mb-4 border border-sky-200 shadow-inner"
-            >
-              <Smartphone className="w-8 h-8 text-sky-500" />
-            </motion.div>
-            <div className="bg-sky-500 text-white font-extrabold text-3xs px-4 py-1.5 rounded-full shadow-md tracking-wider flex items-center gap-1.5 hover:bg-sky-600 cursor-pointer pointer-events-auto">
-              <Sparkles className="w-3 h-3 animate-pulse" />
-              프로필 링크 클릭 (공익 위키)
-            </div>
-            <p className="text-[10px] text-slate-500 font-medium mt-3.5 leading-snug">
-              지금 바로 프로필 링크를 터치하고<br />상세 혜택 꿀정보 공지 확인!
-            </p>
-          </div>
-        );
-      default:
-        return null;
-    }
+
+          {/* Spacer to give room for bottom caption overlapping */}
+          <div className="h-4"></div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -306,13 +357,110 @@ export default function VideoPlayer({ data }: VideoPlayerProps) {
 
       {/* Visual Prompt Builder Card mirroring the Bento spec */}
       <div className="w-full mt-3 bg-slate-800/40 p-3 rounded-2xl border border-slate-700/50 z-10 text-left">
-        <p className="text-sky-400 text-[10px] font-mono mb-1 flex items-center gap-1 font-bold">
-          <Sparkles className="w-3 h-3 text-sky-400" />
-          # Visual Prompt Builder (장면 {activeScene.sceneNumber})
-        </p>
+        <div className="flex justify-between items-center mb-1.5">
+          <p className="text-sky-400 text-[10px] font-mono flex items-center gap-1 font-bold">
+            <Sparkles className="w-3 h-3 text-sky-400" />
+            # 가상 이미지 스타일러 (장면 {activeScene.sceneNumber})
+          </p>
+          <button
+            onClick={() => setImgSeedOffset((prev) => prev + 1)}
+            className="px-2 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500/35 text-[7.5px] font-extrabold text-sky-450 text-sky-400 border border-sky-400/40 transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+            title="다른 인공지능 스타일 및 무드로 이미지 즉시 교체"
+          >
+            <Palette className="w-2.5 h-2.5" />
+            무드 다양화
+          </button>
+        </div>
         <p className="text-slate-300 text-3xs font-medium leading-relaxed line-clamp-2">
           {activeScene.prompt}
         </p>
+      </div>
+
+      {/* Collapsible Natural Voice Tuning Panel */}
+      <div className="w-full mt-2 border border-slate-700/65 bg-slate-800/25 rounded-2xl p-2.5 text-left transition-all z-10">
+        <button
+          onClick={() => setIsVoicePanelOpen(!isVoicePanelOpen)}
+          className="w-full flex justify-between items-center text-sky-400 hover:text-sky-350 text-3xs font-black tracking-wider uppercase cursor-pointer"
+        >
+          <span className="flex items-center gap-1">
+            <Volume2 className="w-3.5 h-3.5" />
+            🎙️ AI 목소리 세부조정 & 자연어 인코딩 {isVoicePanelOpen ? "▲" : "▼"}
+          </span>
+          <span className="text-[8px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">고품질 뉴럴 케어</span>
+        </button>
+
+        {isVoicePanelOpen && (
+          <div className="mt-3.5 space-y-3 border-t border-slate-800/40 pt-2.5 animate-fade-in">
+            {/* System Korean voice selection drop-down */}
+            <div className="space-y-1">
+              <label className="text-[8.5px] text-slate-350 font-bold flex justify-between">
+                <span>컴퓨터 내장 자연어 성우 목록</span>
+                <span className="text-sky-400 text-[7px] font-medium">Google/Siri 뉴럴 성우 권장</span>
+              </label>
+              <select
+                value={chosenSystemVoiceName}
+                onChange={(e) => setChosenSystemVoiceName(e.target.value)}
+                className="w-full p-2 bg-slate-900 border border-slate-700 rounded-xl text-3xs font-extrabold text-slate-200 focus:outline-none focus:border-sky-500"
+              >
+                {systemVoiceList.length === 0 ? (
+                  <option value="">(자동 감지 중...)</option>
+                ) : (
+                  systemVoiceList.map((voice) => (
+                    <option key={voice.name} value={voice.name}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {/* Speaking Rate and Pitch Slides */}
+            <div className="grid grid-cols-2 gap-3 pb-1">
+              {/* Rate slide */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[8px] text-slate-400 font-bold">
+                  <span>말하기 속도 (Speed)</span>
+                  <span className="text-sky-450 text-sky-400 font-mono">{voiceRate.toFixed(2)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.8"
+                  max="1.3"
+                  step="0.02"
+                  value={voiceRate}
+                  onChange={(e) => setVoiceRate(parseFloat(e.target.value))}
+                  className="w-full h-1 bg-slate-700 rounded-lg accent-sky-400 cursor-pointer"
+                />
+              </div>
+
+              {/* Pitch slide */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[8px] text-slate-400 font-bold">
+                  <span>목소리 높낮이 (Pitch)</span>
+                  <span className="text-sky-450 text-sky-400 font-mono">{voicePitch.toFixed(2)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.8"
+                  max="1.3"
+                  step="0.02"
+                  value={voicePitch}
+                  onChange={(e) => setVoicePitch(parseFloat(e.target.value))}
+                  className="w-full h-1 bg-slate-700 rounded-lg accent-sky-400 cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Speaking Demo Preview trigger */}
+            <button
+              onClick={playVoicePreview}
+              className="w-full py-1.5 px-2 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-400/20 rounded-xl text-3xs font-extrabold flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-sky-400" />
+              나레이션 음속 및 목소리 테스트하기
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Playback & Seek Deck */}

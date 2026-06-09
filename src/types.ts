@@ -15,6 +15,10 @@ export interface ShortformData {
   meta: {
     title: string;
     coreBenefits: string;
+    youtubeTitle?: string;
+    youtubeTags?: string[];
+    youtubeDescription?: string;
+    recommendedBpmBgm?: string;
   };
 }
 

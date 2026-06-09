@@ -15,6 +15,9 @@ export default function App() {
   const [activeShortform, setActiveShortform] = useState<ShortformData | null>(null);
   const [savedVideos, setSavedVideos] = useState<SavedVideo[]>([]);
   
+  // Loadings & state variables
+  const [targetPlatform, setTargetPlatform] = useState<"standard" | "youtube">("youtube");
+  
   // Loading & Error states
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -117,7 +120,7 @@ export default function App() {
       const response = await fetch("/api/generate-shortform", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: notice.title, content: contentToAnalyze })
+        body: JSON.stringify({ title: notice.title, content: contentToAnalyze, targetPlatform })
       });
       const resJson = await response.json();
       if (resJson.success && resJson.data) {
@@ -268,6 +271,8 @@ export default function App() {
               onRefreshList={fetchNotices}
               onGenerate={handleGenerateShortform}
               isGenerating={isGenerating}
+              targetPlatform={targetPlatform}
+              onChangePlatform={setTargetPlatform}
             />
           </div>
 
